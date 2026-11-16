@@ -334,7 +334,7 @@ const PUBK=['unit','pass','showAns','shuffle','music','game'];
 const pubSet=()=>Object.fromEntries(PUBK.map(k=>[k,DB.set[k]]));
 function applyPub(d,ver){
  if(Array.isArray(d.cats)&&d.cats.length)DB.cats=d.cats;if(Array.isArray(d.exams))DB.exams=d.exams;if(Array.isArray(d.bank))DB.bank=d.bank;
- if(d.set)PUBK.forEach(k=>{if(d.set[k]!==undefined)DB.set[k]=d.set[k]});
+ if(d.set)PUBK.forEach(k=>{if(d.set[k]!==undefined)DB.set[k]=d.set[k]});fixUnit();
  ['cats','exams','bank','set'].forEach(k=>LS.set('dt_'+k,DB[k]));LS.set('dt_pubver',ver);LS.set('dt_dirty',false);NET.ver=ver;NET.dirty=false}
 async function netLoad(){
  for(let i=0;i<2;i++){try{const j=await apiGet();if(j&&j.ok){NET.ok=true;NET.srv=j.ver||0;
@@ -393,12 +393,13 @@ const DEF_EXAMS=[
  {id:'e5',name:'Các tội phạm theo Bộ luật Hình sự',cats:['tphs'],topic:'',n:20,min:30,on:true},
  {id:'e6',name:'Hình sự (tổng hợp)',cats:['tths','tphs'],topic:'',n:20,min:30,on:true},
  {id:'e7',name:'Tổng hợp các lĩnh vực',cats:['thads','ttds','tcds','tths','tphs','ksdd','nq205','cds'],topic:'',n:30,min:45,on:false}];
-const DEF_SET={unit:'Viện kiểm sát nhân dân khu vực 11 – Đắk Lắk',pass:5,showAns:true,shuffle:true,music:true,game:true,pin:hash('1234'),pinDefault:true};
+const DEF_SET={unit:'Viện kiểm sát nhân dân khu vực 12 – Đắk Lắk',pass:5,showAns:true,shuffle:true,music:true,game:true,pin:hash('1234'),pinDefault:true};
 const DB={
  cats:LS.get('dt_cats',null)||DEF_CATS.map(c=>({...c})),
  exams:LS.get('dt_exams',null)||DEF_EXAMS.map(e=>({...e,cats:[...e.cats]})),
  set:Object.assign({},DEF_SET,LS.get('dt_set',{})),
  bank:LS.get('dt_bank',null)};
+const fixUnit=()=>{if(typeof DB.set.unit==='string')DB.set.unit=DB.set.unit.replace(/(khu vực)\s*11(?!\d)/g,'$1 12')};fixUnit();
 if(!Array.isArray(DB.bank))DB.bank=BUILTIN.map(q=>({...q,o:[...q.o],id:q.id||uid()}));
 const save=k=>{LS.set('dt_'+k,DB[k]);if(API&&!NET.dirty){NET.dirty=true;LS.set('dt_dirty',true);const b=$('#netbar');if(b)b.outerHTML=netBar()}};
 const catName=id=>(DB.cats.find(c=>c.id===id)||{name:id||'(chưa phân loại)'}).name;
