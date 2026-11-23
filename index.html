@@ -197,6 +197,29 @@ a.btn{text-decoration:none;display:inline-block}
 .sync.ok{color:#86efac}.sync.bad{color:#fca5a5}
 .spin{width:42px;height:42px;margin:4px auto 12px;border-radius:50%;border:4px solid rgba(255,255,255,.18);border-top-color:var(--gold);animation:spin .9s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
+/* --- đánh giá nhận thức (học tập nghị quyết) --- */
+.ntbox{max-width:760px;margin:0 auto}
+.ntscore{font-size:clamp(40px,8vw,66px);font-weight:900;text-align:center;color:#fff;text-shadow:0 4px 0 rgba(0,0,0,.45)}
+.ntscore small{font-size:.42em;color:var(--muted);font-weight:800}
+.ntrule{font-size:14px;color:var(--muted);text-align:center;margin:6px 0 12px}
+.ntby{width:100%;border-collapse:collapse;font-size:14px;margin-top:6px}.ntby td{padding:7px 8px;border-bottom:1px solid var(--line)}.ntby td:last-child{text-align:right;font-weight:800}
+.dtag{font-size:12px;font-weight:800;padding:4px 10px;border-radius:999px;background:#fde68a;color:#7a4b00}
+.pfi{display:flex;gap:14px;flex-wrap:wrap;margin:4px 0}
+#pp{display:none}
+@media print{
+ body.pp>*:not(#pp){display:none!important}
+ body.pp{background:#fff!important}
+ body.pp #pp{display:block;color:#000;font-family:'Times New Roman',Times,serif;font-size:13pt;line-height:1.4}
+ @page{size:A4;margin:20mm 15mm 15mm 30mm}
+}
+#pp table{border-collapse:collapse;width:100%}
+#pp .hd td{vertical-align:top;text-align:center;font-size:13pt}
+#pp .bd td,#pp .bd th{border:1px solid #000;padding:5px 6px;vertical-align:top;text-align:left}
+#pp .bd th{text-align:center;font-weight:bold}
+#pp .tt{text-align:center;font-weight:bold;font-size:14pt;margin:14px 0 0}
+#pp p{margin:3px 0}
+#pp .sg td{text-align:center;vertical-align:top;padding-top:8px}
+.ntby td:first-child{text-align:left}
 </style>
 </head>
 <body>
@@ -324,26 +347,35 @@ function view(html,mus){stopT();app.innerHTML=html;scrollTo({top:0});if(mus!==un
    Không có config.js (chạy file trên máy) → hoạt động ngoại tuyến như cũ. */
 const CFG=Object.assign({api:'',sheet:''},window.DT_CONFIG||{});
 const API=/^https?:\/\/\S+$/.test(String(CFG.api||'').trim())?String(CFG.api).trim():'';
-const NET={ver:LS.get('dt_pubver',0),srv:null,ok:null,dirty:!!API&&LS.get('dt_dirty',false),key:'',busy:false};
+const NET={ver:LS.get('dt_pubver',0),srv:null,ok:null,dirty:!!API&&LS.get('dt_dirty',false),key:'',busy:false,cap:LS.get('dt_cap',[])};
+const hasCap=c=>!!API&&Array.isArray(NET.cap)&&NET.cap.includes(c);
+const setCap=j=>{if(j&&j.ok){NET.cap=Array.isArray(j.cap)?j.cap:[];LS.set('dt_cap',NET.cap)}};
 try{NET.key=sessionStorage.getItem('dt_k')||''}catch(e){}
 async function apiGet(ms=15000){const c=new AbortController(),t=setTimeout(()=>c.abort(),ms);
  try{const r=await fetch(API+(API.includes('?')?'&':'?')+'action=config&_='+Date.now(),{signal:c.signal});return await r.json()}finally{clearTimeout(t)}}
 async function apiPost(body,ms=20000){const c=new AbortController(),t=setTimeout(()=>c.abort(),ms);
  try{const r=await fetch(API,{method:'POST',body:JSON.stringify(body),signal:c.signal});return await r.json()}finally{clearTimeout(t)}}
-const PUBK=['unit','pass','showAns','shuffle','music','game'];
+const PUBK=['unit','pass','showAns','shuffle','music','game','ptop','pcb'];
 const pubSet=()=>Object.fromEntries(PUBK.map(k=>[k,DB.set[k]]));
 function applyPub(d,ver){
  if(Array.isArray(d.cats)&&d.cats.length)DB.cats=d.cats;if(Array.isArray(d.exams))DB.exams=d.exams;if(Array.isArray(d.bank))DB.bank=d.bank;
  if(d.set)PUBK.forEach(k=>{if(d.set[k]!==undefined)DB.set[k]=d.set[k]});fixUnit();
  ['cats','exams','bank','set'].forEach(k=>LS.set('dt_'+k,DB[k]));LS.set('dt_pubver',ver);LS.set('dt_dirty',false);NET.ver=ver;NET.dirty=false}
 async function netLoad(){
- for(let i=0;i<2;i++){try{const j=await apiGet();if(j&&j.ok){NET.ok=true;NET.srv=j.ver||0;
-  if(j.ver&&j.data&&!NET.dirty&&(j.ver!==NET.ver||!LS.get('dt_bank',null)))applyPub(j.data,j.ver);return}}catch(e){}}
+ for(let i=0;i<2;i++){try{const j=await apiGet();if(j&&j.ok){NET.ok=true;NET.srv=j.ver||0;setCap(j);
+  const kc=new Set((DB.exams||[]).filter(e=>e.kin).flatMap(e=>e.cats)),kinLeft=hasCap('kin')&&DB.bank.some(q=>kc.has(q.cat)&&q.x!==1);/* đáp án chấm kín còn sót trên máy */
+  if(j.ver&&j.data&&!NET.dirty&&(j.ver!==NET.ver||!LS.get('dt_bank',null)||kinLeft))applyPub(j.data,j.ver);return}}catch(e){}}
  NET.ok=false}
 const outbox=()=>LS.get('dt_outbox',[]);
+/* kết quả bài thi chấm kín do máy chủ trả về */
+function graded(r,res){const g=LS.get('dt_graded',{});g[r.id]=res;const ks=Object.keys(g);if(ks.length>50)delete g[ks[0]];LS.set('dt_graded',g);
+ if(res&&res.n){const rs=LS.get('dt_results',[]);if(!rs.some(x=>x.id===r.id)){rs.unshift({id:r.id,t:r.t,name:r.name,unit:r.unit,exam:r.exam,ok:res.ok,n:res.n,score:Math.round(res.ok/res.n*1000)/100,dur:r.dur,auto:!!r.auto,pass:!!res.pass});LS.set('dt_results',rs.slice(0,3000))}}}
 async function flush(){
  if(!API||NET.busy)return;const q=outbox();if(!q.length)return;NET.busy=true;const left=[];
- try{for(const r of q){try{const j=await apiPost({action:'submit',r});if(!(j&&j.ok))left.push(r)}catch(e){left.push(r)}}}finally{NET.busy=false}
+ try{for(const r of q){try{const j=await apiPost({action:r.k?'grade':'submit',r});
+  if(j&&j.ok){if(r.k)graded(r,j.res||{})}
+  else if(j&&j.fatal){if(r.k)graded(r,{err:j.err||'Máy chủ không chấm được bài thi.'})}/* lỗi không thể gửi lại: bỏ khỏi hàng đợi */
+  else left.push(r)}catch(e){left.push(r)}}}finally{NET.busy=false}
  const added=outbox().filter(r=>!q.some(x=>x.id===r.id));LS.set('dt_outbox',[...left,...added].slice(-300))}
 function syncUI(){const el=$('#sync');if(!el)return;const n=outbox().length;
  el.className='sync '+(NET.busy?'':n?'bad':'ok');
@@ -354,20 +386,25 @@ function netSt(){if(!API)return'';const n=outbox().length;
 function netBar(){const f=v=>new Date(v).toLocaleString('vi-VN');
  return `<div class="panel netbar" id="netbar"><div><b>🌐 Chế độ trực tuyến</b> · Bản trên máy chủ: <b>${NET.ok===false?'chưa kết nối được':NET.srv?f(NET.srv):'chưa công bố (người thi đang dùng bộ mặc định)'}</b>
  ${NET.srv&&NET.ver&&NET.srv!==NET.ver?`<div class="err-t">⚠ Máy chủ có bản khác bản máy này đang dùng (${f(NET.ver)}) – có thể đã công bố từ máy khác.</div>`:''}
- ${NET.dirty?'<div class="err-t" style="margin-top:4px">⚠ Có thay đổi trên máy này <b>chưa công bố</b> – người thi chưa thấy.</div>':'<div class="note">Sửa cuộc thi, câu hỏi, thiết lập xong → bấm “Công bố” để áp dụng cho mọi người thi.</div>'}</div>
+ ${NET.dirty?'<div class="err-t" style="margin-top:4px">⚠ Có thay đổi trên máy này <b>chưa công bố</b> – người thi chưa thấy.</div>':'<div class="note">Sửa cuộc thi, câu hỏi, thiết lập xong → bấm “Công bố” để áp dụng cho mọi người thi.</div>'}
+ ${DB.exams.some(e=>e.kin)?(hasCap('kin')?'<div class="ok-t" style="font-size:13px;margin-top:4px">🔒 Cuộc thi chấm kín: đáp án chỉ lưu trên máy chủ (không gửi về máy người thi), máy chủ chấm bài.</div>':`<div class="err-t" style="font-size:13px;margin-top:4px">⚠ Máy chủ ${NET.ok===false?'chưa kết nối được':'chưa cập nhật <b>Code.gs bản mới</b>'} – đáp án cuộc thi chấm kín sẽ bị gửi kèm đề về máy người thi.</div>`):''}</div>
  <div><button class="btn gold sm" onclick="publish()">📡 Công bố lên máy chủ</button><button class="btn ghost sm" onclick="pull()">↺ Lấy bản trên máy chủ</button></div></div>`}
 async function publish(){
+ const kx=DB.exams.filter(e=>e.kin&&e.on);
+ if(kx.length&&!hasCap('kin')&&!await uiConfirm(`⚠ Máy chủ chưa hỗ trợ <b>chấm kín</b> (chưa cập nhật Code.gs bản mới).<br>Nếu công bố bây giờ, đáp án của “${esc(kx.map(e=>e.name).join('”, “'))}” sẽ được gửi kèm đề về máy người thi.<br><br>Nên cập nhật Code.gs trước (xem hướng dẫn kèm theo). Vẫn công bố?`,'Vẫn công bố','Hủy'))return;
  if(!await uiConfirm(`Công bố bộ thiết lập hiện tại lên máy chủ?<br>• ${DB.exams.filter(e=>e.on).length} cuộc thi đang mở · ${DB.bank.length} câu hỏi · ${DB.cats.length} lĩnh vực<br>• Người thi mở (hoặc tải lại) trang sẽ nhận bản mới; bài đang làm dở không bị ảnh hưởng.`,'📡 Công bố','Hủy'))return;
  const done=busy('Đang công bố lên máy chủ…');let j;
  try{j=await apiPost({action:'publish',key:NET.key,data:{cats:DB.cats,exams:DB.exams,bank:DB.bank,set:pubSet()}},90000)}catch(e){j={ok:false,err:'Không kết nối được máy chủ.'}}finally{done()}
  if(!j||!j.ok){uiAlert('❌ '+esc(j&&j.err||'Công bố không thành công.'));return}
- LS.set('dt_pubver',j.ver);LS.set('dt_dirty',false);NET.ver=NET.srv=j.ver;NET.dirty=false;NET.ok=true;
- await uiAlert(`✔ Đã công bố lên máy chủ: ${j.q} câu hỏi.`);admin(ATAB)}
+ LS.set('dt_pubver',j.ver);LS.set('dt_dirty',false);NET.ver=NET.srv=j.ver;NET.dirty=false;NET.ok=true;if(j.cap)setCap(j);
+ await uiAlert(`✔ Đã công bố lên máy chủ: ${j.q} câu hỏi.${j.kin?`<br>🔒 ${j.kin} câu thuộc cuộc thi chấm kín: đáp án chỉ lưu trên máy chủ.`:''}${j.nokey?`<br><span class="err-t">⚠ ${j.nokey} câu chấm kín chưa có đáp án trên máy chủ – nạp lại file có đáp án rồi công bố lại.</span>`:''}`);admin(ATAB)}
+/* người thiết lập: lấy bản đầy đủ (kèm đáp án chấm kín) từ máy chủ */
+async function pullFull(){if(!hasCap('kin')||!NET.key)return null;try{const j=await apiPost({action:'full',key:NET.key},30000);if(j&&j.ok){setCap(j);return j}}catch(e){}return null}
 async function pull(){
  if(NET.dirty&&!await uiConfirm('Bỏ các thay đổi <b>chưa công bố</b> trên máy này và lấy bản đang có trên máy chủ?','Lấy bản máy chủ','Hủy'))return;
- const done=busy('Đang tải từ máy chủ…');let j;try{j=await apiGet(30000)}catch(e){}finally{done()}
+ const done=busy('Đang tải từ máy chủ…');let j;try{j=await pullFull()||await apiGet(30000)}catch(e){}finally{done()}
  if(!j||!j.ok){uiAlert('❌ Không kết nối được máy chủ.');return}
- NET.ok=true;NET.srv=j.ver||0;if(!j.ver||!j.data){uiAlert('Máy chủ chưa có bản công bố nào.');admin(ATAB);return}
+ NET.ok=true;NET.srv=j.ver||0;setCap(j);if(!j.ver||!j.data){uiAlert('Máy chủ chưa có bản công bố nào.');admin(ATAB);return}
  applyPub(j.data,j.ver);await uiAlert('✔ Đã lấy bản trên máy chủ.');admin(ATAB)}
 function busy(m){const d=document.createElement('div');d.className='mback';d.innerHTML=`<div class="mbox enter center"><div class="spin"></div><div class="mmsg">${m}</div></div>`;document.body.appendChild(d);return()=>d.remove()}
 if(API){addEventListener('online',resend);setInterval(()=>{if(outbox().length&&!NET.busy)resend()},60000)}
@@ -381,7 +418,24 @@ const DEF_CATS=[
  {id:'tphs',name:'Các tội phạm theo Bộ luật Hình sự',grp:'Hình sự'},
  {id:'ksdd',name:'Kiểm sát giải quyết vụ án dân sự liên quan đến đất đai',grp:'Dân sự'},
  {id:'nq205',name:'Thí điểm VKS khởi kiện vụ án dân sự (NQ 205/2025/QH15)',grp:'Dân sự'},
- {id:'cds',name:'Chuyển đổi số, an ninh mạng, kỹ năng số',grp:'Chuyển đổi số'}];
+ {id:'cds',name:'Chuyển đổi số, an ninh mạng, kỹ năng số',grp:'Chuyển đổi số'},
+ {id:'hntw4',name:'Nghị quyết Hội nghị Trung ương 4 khóa XIV',grp:'Học tập Nghị quyết'}];
+/* Mẫu cuộc thi “Đánh giá nhận thức” theo CV 433-CV/ĐU ngày 20/11/2026 của BTV Đảng ủy VKSND tỉnh Đắk Lắk:
+   ngân hàng 77 câu; theo hướng dẫn cấp trên mỗi đảng viên làm 20 câu (rút ngẫu nhiên, chia đều theo 6 văn bản);
+   đạt yêu cầu khi trả lời đúng từ 70% tổng số câu trở lên (14/20); giữ nguyên thứ tự câu/phương án;
+   không quy đổi điểm, không xếp loại, không trò chơi; đáp án chấm kín trên máy chủ. Câu hỏi KHÔNG đưa vào file này (kho công khai). */
+const NT_PRESET={id:'nt4',name:'Đánh giá nhận thức Nghị quyết Hội nghị Trung ương 4 khóa XIV',cats:['hntw4'],topic:'',n:20,min:30,on:true,mode:'nt',passPct:70,kin:true};
+/* rút n câu chia theo tỷ lệ số câu của từng văn bản (chủ đề), giữ nguyên thứ tự gốc; 77→20: mỗi văn bản 2–4 câu */
+function ntPick(pool,n){if(n>=pool.length)return pool.slice();
+ const g=new Map();pool.forEach((q,i)=>{const t=q.topic||'';if(!g.has(t))g.set(t,[]);g.get(t).push(i)});
+ const L=[...g.values()],quota=L.map(a=>a.length*n/pool.length),take=quota.map(Math.floor);let left=n-take.reduce((s,x)=>s+x,0);
+ for(const i of shuf(L.map((_,i)=>i)).sort((a,b)=>(quota[b]-take[b])-(quota[a]-take[a]))){if(left<=0)break;if(take[i]<L[i].length){take[i]++;left--}}
+ const keep=new Set();L.forEach((a,i)=>shuf(a).slice(0,take[i]).forEach(x=>keep.add(x)));return pool.filter((_,i)=>keep.has(i))}
+/* cuộc thi đã tạo theo mẫu cũ (77 câu/90 phút) → chuyển sang 20 câu/30 phút */
+function fixNT(){let ch=false;DB.exams.forEach(e=>{if(isNT(e)&&e.n===77&&e.min===90){e.n=NT_PRESET.n;e.min=NT_PRESET.min;ch=true}});return ch}
+const isNT=e=>!!e&&e.mode==='nt';
+const ntPass=(ok,n,pct)=>ok*100>=(pct||70)*n;            /* so sánh số nguyên, tránh sai số làm tròn */
+const ntNeed=(n,pct)=>Math.ceil((pct||70)*n/100-1e-9);    /* 77 câu × 70% → cần 54 câu */
 const DEF_EXAMS=[
  {id:'e1',name:'Thi hành án dân sự',cats:['thads'],topic:'',n:20,min:30,on:true},
  {id:'e8',name:'Kiểm sát giải quyết vụ án dân sự liên quan đến đất đai',cats:['ksdd'],topic:'',n:20,min:30,on:true},
@@ -393,7 +447,8 @@ const DEF_EXAMS=[
  {id:'e5',name:'Các tội phạm theo Bộ luật Hình sự',cats:['tphs'],topic:'',n:20,min:30,on:true},
  {id:'e6',name:'Hình sự (tổng hợp)',cats:['tths','tphs'],topic:'',n:20,min:30,on:true},
  {id:'e7',name:'Tổng hợp các lĩnh vực',cats:['thads','ttds','tcds','tths','tphs','ksdd','nq205','cds'],topic:'',n:30,min:45,on:false}];
-const DEF_SET={unit:'Viện kiểm sát nhân dân khu vực 12 – Đắk Lắk',pass:5,showAns:true,shuffle:true,music:true,game:true,pin:hash('1234'),pinDefault:true};
+const DEF_SET={unit:'Viện kiểm sát nhân dân khu vực 12 – Đắk Lắk',pass:5,showAns:true,shuffle:true,music:true,game:true,pin:hash('1234'),pinDefault:true,
+ ptop:'ĐẢNG BỘ VIỆN KIỂM SÁT NHÂN DÂN TỈNH ĐẮK LẮK',pcb:'CHI BỘ VIỆN KIỂM SÁT NHÂN DÂN KHU VỰC 12'};
 const DB={
  cats:LS.get('dt_cats',null)||DEF_CATS.map(c=>({...c})),
  exams:LS.get('dt_exams',null)||DEF_EXAMS.map(e=>({...e,cats:[...e.cats]})),
@@ -404,7 +459,12 @@ if(!Array.isArray(DB.bank))DB.bank=BUILTIN.map(q=>({...q,o:[...q.o],id:q.id||uid
 const save=k=>{LS.set('dt_'+k,DB[k]);if(API&&!NET.dirty){NET.dirty=true;LS.set('dt_dirty',true);const b=$('#netbar');if(b)b.outerHTML=netBar()}};
 const catName=id=>(DB.cats.find(c=>c.id===id)||{name:id||'(chưa phân loại)'}).name;
 const catGrp=id=>(DB.cats.find(c=>c.id===id)||{grp:''}).grp;
-function poolFor(ex){const t=norm(ex.topic);return DB.bank.filter(q=>ex.cats.includes(q.cat)&&(!t||norm((q.topic||'')+' '+(q.ref||'')).includes(t))&&q.q&&Array.isArray(q.o)&&q.o.length>=2&&q.a>=0&&q.a<q.o.length)}
+function poolFor(ex){const t=norm(ex.topic);return DB.bank.filter(q=>ex.cats.includes(q.cat)&&(!t||norm((q.topic||'')+' '+(q.ref||'')).includes(t))&&q.q&&Array.isArray(q.o)&&q.o.length>=2&&(q.x===1||q.a>=0&&q.a<q.o.length))}
+/* thêm lĩnh vực + cuộc thi đánh giá nhận thức HNTW4 nếu chưa có; trả về true nếu vừa tạo cuộc thi */
+function ensureNT(){
+ if(!DB.cats.some(c=>c.id==='hntw4'))DB.cats.push({...DEF_CATS.find(c=>c.id==='hntw4')});
+ if(DB.exams.some(e=>isNT(e)&&e.cats.includes('hntw4')))return false;
+ DB.exams.unshift({...NT_PRESET,cats:[...NT_PRESET.cats],id:DB.exams.some(e=>e.id==='nt4')?'nt'+uid():'nt4'});return true}
 /* Bổ sung lĩnh vực, cuộc thi mặc định và câu hỏi gốc còn thiếu (giữ nguyên dữ liệu đã có) */
 function addBuiltin(cats){
  DEF_CATS.filter(c=>cats.includes(c.id)&&!DB.cats.some(x=>x.id===c.id)).forEach(c=>DB.cats.push({...c}));
@@ -423,6 +483,7 @@ const SEEDS=[[2,['ksdd','nq205']],[3,['cds']]],SEED=3;
  LS.set('dt_seed',SEED)}}
 /* người thiết lập: nhắc thêm bộ gốc mới chưa có trong bộ đang dùng (mỗi bộ hỏi 1 lần/máy) */
 async function askNewPacks(){
+ if(fixNT()){save('exams');await uiAlert(`🎓 Đã chuyển cuộc thi đánh giá nhận thức sang <b>${NT_PRESET.n} câu / ${NT_PRESET.min} phút</b> (rút ngẫu nhiên từ ngân hàng 77 câu, chia đều theo 6 văn bản; đạt ≥ ${ntNeed(NT_PRESET.n,70)}/${NT_PRESET.n}) theo hướng dẫn cấp trên.${API?'<br>Bấm <b>📡 Công bố lên máy chủ</b> để áp dụng.':''}`);admin(ATAB)}
  const asked=LS.get('dt_packask',[]),miss=[...new Set(BUILTIN.map(q=>q.cat))].filter(c=>!DB.cats.some(x=>x.id===c)&&!asked.includes(c));
  if(!miss.length)return;LS.set('dt_packask',[...asked,...miss]);
  const names=miss.map(c=>'• '+esc((DEF_CATS.find(x=>x.id===c)||{name:c}).name)+' ('+BUILTIN.filter(q=>q.cat===c).length+' câu)').join('<br>');
@@ -453,13 +514,14 @@ function home(){
   <div><label class="lb">Đơn vị / chức danh</label><input class="inp" id="un" maxlength="80" value="${esc(me.unit)}" placeholder="Không bắt buộc"></div>
  </div></div>
  <div class="panel"><div class="h3">Chọn lĩnh vực thi</div>
- ${ex.length?`<div class="exlist">${ex.map(e=>{const p=poolFor(e).length,n=Math.min(e.n,p);return`<button class="excard ${e.id===SEL?'sel':''}" ${p?'':'disabled'} onclick="selEx('${e.id}')"><span class="g">${esc(grpOf(e))}</span><b>${esc(e.name)}</b><small>${p?`📝 ${n} câu · ⏱ ${e.min} phút`:'Chưa có câu hỏi'}</small></button>`}).join('')}</div>`:nodata?'<p class="err-t">⚠ Chưa tải được đề thi từ máy chủ (mất mạng hoặc mạng cơ quan chặn). Kiểm tra kết nối rồi bấm thử lại.</p><button class="btn blue" onclick="location.reload()">↻ Thử kết nối lại</button>':'<p class="note">Chưa có cuộc thi nào được mở. Liên hệ người thiết lập.</p>'}
+ ${ex.length?`<div class="exlist">${ex.map(e=>{const p=poolFor(e).length,n=Math.min(e.n,p);return`<button class="excard ${e.id===SEL?'sel':''}" ${p?'':'disabled'} onclick="selEx('${e.id}')"><span class="g">${esc(grpOf(e))}</span><b>${esc(e.name)}</b><small>${p?`📝 ${n} câu · ⏱ ${e.min} phút${isNT(e)?`<br>✔ Đạt yêu cầu: đúng từ ${e.passPct||70}% số câu (≥ ${ntNeed(n,e.passPct)}/${n})`:''}`:'Chưa có câu hỏi'}</small></button>`}).join('')}</div>`:nodata?'<p class="err-t">⚠ Chưa tải được đề thi từ máy chủ (mất mạng hoặc mạng cơ quan chặn). Kiểm tra kết nối rồi bấm thử lại.</p><button class="btn blue" onclick="location.reload()">↻ Thử kết nối lại</button>':'<p class="note">Chưa có cuộc thi nào được mở. Liên hệ người thiết lập.</p>'}
  <div style="margin-top:18px"><button class="btn gold big" onclick="exStart()" ${SEL?'':'disabled'}>▶ BẮT ĐẦU LÀM BÀI</button></div>
- ${DB.set.game?`<div class="center" style="margin-top:6px"><button class="btn purple sm" onclick="gameStart()" ${SEL?'':'disabled'}>🎮 Luyện tập vui (dạng trò chơi)</button><button class="btn ghost sm" onclick="lbView()">🏅 Bảng vàng luyện tập</button></div>`:''}
+ ${DB.set.game?`<div class="center" style="margin-top:6px"><button class="btn purple sm" onclick="gameStart()" ${SEL&&!isNT(DB.exams.find(x=>x.id===SEL))?'':'disabled'}>🎮 Luyện tập vui (dạng trò chơi)</button><button class="btn ghost sm" onclick="lbView()">🏅 Bảng vàng luyện tập</button></div>`:''}
  </div></div>`,null);
  ['nm','un'].forEach(id=>$('#'+id).oninput=()=>LS.set('dt_me',{name:$('#nm').value.trim(),unit:$('#un').value.trim()}));
 }
-function selEx(id){SEL=id;LS.set('dt_lastex',id);sfx('click');document.querySelectorAll('.excard').forEach(b=>b.classList.toggle('sel',b.getAttribute('onclick').includes("'"+id+"'")));document.querySelectorAll('button[onclick="exStart()"],button[onclick="gameStart()"]').forEach(b=>b.disabled=false)}
+function selEx(id){SEL=id;LS.set('dt_lastex',id);sfx('click');document.querySelectorAll('.excard').forEach(b=>b.classList.toggle('sel',b.getAttribute('onclick').includes("'"+id+"'")));
+ const nt=isNT(DB.exams.find(x=>x.id===id));document.querySelectorAll('button[onclick="exStart()"]').forEach(b=>b.disabled=false);document.querySelectorAll('button[onclick="gameStart()"]').forEach(b=>b.disabled=nt)}
 function me(){const name=$('#nm').value.trim(),unit=$('#un').value.trim();if(!name){uiAlert('Vui lòng nhập <b>họ và tên</b> người thi.');$('#nm').focus();return null}LS.set('dt_me',{name,unit});return{name,unit}}
 
 /* ---- Bài thi ---- */
@@ -467,17 +529,25 @@ let EX=null,EXT=null;
 async function exStart(){
  const p=me();if(!p)return;const e=DB.exams.find(x=>x.id===SEL);if(!e)return;
  const pool=poolFor(e),n=Math.min(e.n,pool.length);if(!n)return;
+ const nt=isNT(e),pct=e.passPct||70;
+ /* chấm kín: câu hỏi không có đáp án trên máy này (máy chủ đã giữ lại) hoặc cuộc thi đặt chấm kín và máy chủ hỗ trợ */
+ const kin=pool.some(q=>q.x===1)||(!!e.kin&&hasCap('kin'));
+ if(kin&&!API){uiAlert('Cuộc thi này chấm trên máy chủ – cần mở bằng đường link thi trực tuyến.');return}
  const ok=await uiConfirm(`<div class="h2" style="font-size:20px">📋 ${esc(e.name)}</div>
- <b>Người thi:</b> ${esc(p.name)}${p.unit?' – '+esc(p.unit):''}<br><b>Số câu:</b> ${n} câu trắc nghiệm (mỗi câu 1 đáp án đúng)<br><b>Thời gian:</b> ${e.min} phút<br><br>
- • Có thể chọn câu bất kỳ trong danh sách để làm trước, đổi đáp án, đánh dấu ⚑ để xem lại.<br>• Trước khi nộp bài có màn hình kiểm tra lại.<br>• Hết giờ hệ thống tự động nộp bài.`,'▶ Bắt đầu','Để sau');
+ <b>Người thi:</b> ${esc(p.name)}${p.unit?' – '+esc(p.unit):''}<br><b>Số câu:</b> ${n} câu trắc nghiệm (mỗi câu 1 đáp án đúng)<br><b>Thời gian:</b> ${e.min} phút<br>
+ ${nt?`<b>Mức đạt yêu cầu:</b> trả lời đúng từ ${pct}% tổng số câu trở lên (≥ ${ntNeed(n,pct)}/${n} câu); câu bỏ trống tính là chưa đúng.<br>`:''}<br>
+ • Có thể chọn câu bất kỳ trong danh sách để làm trước, đổi đáp án, đánh dấu ⚑ để xem lại.<br>• Trước khi nộp bài có màn hình kiểm tra lại.<br>• Hết giờ hệ thống tự động nộp bài.${kin?'<br>• Bài được chấm trên máy chủ – cần có mạng khi nộp bài.':''}`,'▶ Bắt đầu','Để sau');
  if(!ok)return;
- const qs=shuf(pool).slice(0,n).map(q=>{const idx=DB.set.shuffle?shuf(q.o.map((_,i)=>i)):q.o.map((_,i)=>i);return{id:q.id,q:q.q,ref:q.ref||'',cat:q.cat,o:idx.map(i=>q.o[i]),a:idx.indexOf(q.a)}});
+ /* đánh giá nhận thức: giữ nguyên thứ tự câu và phương án như bộ câu hỏi gốc (có phương án “Cả A và B”) */
+ const src=nt?ntPick(pool,n):shuf(pool);
+ const qs=src.slice(0,n).map(q=>{const idx=DB.set.shuffle&&!nt?shuf(q.o.map((_,i)=>i)):q.o.map((_,i)=>i);
+  return{id:q.id,q:q.q,ref:q.ref||'',cat:q.cat,tp:q.topic||'',o:idx.map(i=>q.o[i]),p:idx,a:q.x===1?-1:idx.indexOf(q.a)}});
  const now=Date.now();
- EX={exam:{id:e.id,name:e.name,min:e.min},name:p.name,unit:p.unit,qs,ans:qs.map(()=>-1),fl:qs.map(()=>false),cur:0,start:now,end:now+e.min*60000,done:false,warned:false};
- exSave();BG.ts=.6;music(DB.set.music?'calm':null);exRender();
+ EX={exam:{id:e.id,name:e.name,min:e.min},name:p.name,unit:p.unit,qs,ans:qs.map(()=>-1),fl:qs.map(()=>false),cur:0,start:now,end:now+e.min*60000,done:false,warned:false,nt,pct,kin};
+ exSave();BG.ts=.6;music(DB.set.music&&!nt?'calm':null);exRender();
 }
 function exSave(){if(EX)LS.set('dt_cur',EX)}
-function exResume(){EX=LS.get('dt_cur',null);if(!EX)return home();if(Date.now()>=EX.end){exSubmit(true);return}BG.ts=.6;music(DB.set.music?'calm':null);exRender()}
+function exResume(){EX=LS.get('dt_cur',null);if(!EX)return home();if(Date.now()>=EX.end){exSubmit(true);return}BG.ts=.6;music(DB.set.music&&!EX.nt?'calm':null);exRender()}
 async function exDiscard(){if(await uiConfirm('Hủy bài thi đang làm dở? Kết quả sẽ không được ghi nhận.','Hủy bài','Không')){localStorage.removeItem('dt_cur');home()}}
 function exTimer(){
  clearInterval(EXT);
@@ -509,7 +579,7 @@ function exRender(){
 }
 function exQ(){
  const i=EX.cur,q=EX.qs[i];
- $('#qbox').innerHTML=`<div class="qpaper" key="${i}"><div style="display:flex;gap:8px;flex-wrap:wrap"><span class="badge" style="background:#e0e3ff;color:#3730a3;border:0">Câu ${i+1} / ${EX.qs.length}</span>${EX.fl[i]?'<span class="badge fl" style="color:#92400e">⚑ Đã đánh dấu</span>':''}</div>
+ $('#qbox').innerHTML=`<div class="qpaper" key="${i}"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><span class="badge" style="background:#e0e3ff;color:#3730a3;border:0">Câu ${i+1} / ${EX.qs.length}</span>${EX.nt&&q.tp?`<span class="dtag">📘 ${esc(q.tp)}</span>`:''}${EX.fl[i]?'<span class="badge fl" style="color:#92400e">⚑ Đã đánh dấu</span>':''}</div>
  <div class="qt">${esc(q.q)}</div>${q.o.map((o,k)=>`<button class="exo ${EX.ans[i]===k?'sel':''}" onclick="exPick(${k})"><span class="L">${'ABCD'[k]}</span><span>${esc(o)}</span></button>`).join('')}</div>`;
  $('#bfl').textContent=EX.fl[i]?'⚑ Bỏ đánh dấu':'⚑ Đánh dấu xem lại';
 }
@@ -539,13 +609,85 @@ async function exConfirm(){
 }
 function exSubmit(auto){
  clearInterval(EXT);if(!EX||EX.done)return;EX.done=true;localStorage.removeItem('dt_cur');
- const n=EX.qs.length,ok=EX.qs.filter((q,i)=>EX.ans[i]===q.a).length,score=Math.round(ok/n*1000)/100,dur=Math.min(EX.exam.min*60,(Date.now()-EX.start)/1000),pass=score>=DB.set.pass;
+ const n=EX.qs.length,dur=Math.min(EX.exam.min*60,(Date.now()-EX.start)/1000);
+ if(EX.kin){/* chấm kín: gửi lựa chọn (theo thứ tự phương án gốc) về máy chủ, máy chủ đối chiếu đáp án */
+  const rec={id:uid(),t:new Date().toISOString(),name:EX.name,unit:EX.unit,exam:EX.exam.name,n,dur:Math.round(dur),auto:!!auto,
+   k:{exam:EX.exam.id,ids:EX.qs.map(q=>q.id),picks:EX.qs.map((q,i)=>EX.ans[i]<0?-1:q.p[EX.ans[i]])}};
+  const q=outbox();q.push(rec);LS.set('dt_outbox',q.slice(-300));EX.rid=rec.id;EX.dur=rec.dur;EX.auto=!!auto;
+  ntResult();const p=flush();syncUI();p.then(()=>{syncUI();if(EX&&EX.rid===rec.id&&$('#ntwait'))ntResult()});return}
+ const ok=EX.qs.filter((q,i)=>EX.ans[i]===q.a).length,score=Math.round(ok/n*1000)/100,pass=EX.nt?ntPass(ok,n,EX.pct):score>=DB.set.pass;
  const rec={id:uid(),t:new Date().toISOString(),name:EX.name,unit:EX.unit,exam:EX.exam.name,ok,n,score,dur:Math.round(dur),auto:!!auto,pass};
  const res=LS.get('dt_results',[]);res.unshift(rec);LS.set('dt_results',res.slice(0,3000));
  if(API){const q=outbox();q.push(rec);LS.set('dt_outbox',q.slice(-300))}
- exResult({ok,n,score,dur,pass,auto});
+ if(EX.nt){const by={};EX.qs.forEach((q,i)=>{const t=q.tp||'';by[t]=by[t]||[0,0];by[t][1]++;if(EX.ans[i]===q.a)by[t][0]++});
+  EX.rid=rec.id;EX.dur=rec.dur;EX.auto=!!auto;EX.res={ok,n,pass,by};ntResult()}
+ else exResult({ok,n,score,dur,pass,auto});
  if(API){const p=flush();syncUI();p.then(syncUI)}
 }
+/* ---- Kết quả đánh giá nhận thức (không quy đổi điểm, không xếp loại, không hiện đáp án) ---- */
+function ntResult(){
+ stopT();music(null);BG.ts=.8;
+ const g=EX.kin?(LS.get('dt_graded',{})[EX.rid]||null):EX.res,head=`<div class="title3d sm">KẾT QUẢ ĐÁNH GIÁ NHẬN THỨC</div>
+ <div class="sub">${esc(EX.exam.name)}<br>Đồng chí: <b style="color:#fff">${esc(EX.name)}</b>${EX.unit?' · '+esc(EX.unit):''}</div>`;
+ if(!g){/* chờ máy chủ chấm */
+  app.innerHTML=`<div class="enter ntbox">${head}<div class="panel center" id="ntwait"><div class="spin"></div><div class="mmsg">⏳ Bài làm đã được ghi nhận, đang gửi về máy chủ để chấm…</div>
+  <div class="note">Nếu mất mạng: bài được giữ trên máy này và tự gửi lại khi có mạng; có thể bấm “Gửi lại ngay”. Không đóng trình duyệt cho đến khi có kết quả.</div><div class="sync" id="sync"></div>
+  <div style="margin-top:10px"><button class="btn ghost sm" onclick="home()">🏠 Về trang đầu</button></div></div></div>`;scrollTo({top:0});syncUI();
+  clearInterval(EXT);EXT=setInterval(()=>{if(!$('#ntwait')){clearInterval(EXT);return}if(LS.get('dt_graded',{})[EX.rid]){clearInterval(EXT);ntResult()}},1500);return}
+ if(g.err){app.innerHTML=`<div class="enter ntbox">${head}<div class="panel center"><div class="mmsg err-t">❌ ${esc(g.err)}</div><button class="btn gold" onclick="home()">🏠 Về trang đầu</button></div></div>`;return}
+ const pct=EX.pct||70,need=ntNeed(g.n,pct),rate=g.ok/g.n*100;
+ app.innerHTML=`<div class="enter ntbox">${head}
+ <div class="panel center"><div class="note">Số câu trả lời đúng</div><div class="ntscore">${g.ok}/${g.n} <small>(${vnum(rate,1)}%)</small></div>
+  <span class="pass ${g.pass?'y':'n'}">${g.pass?'✔ ĐẠT YÊU CẦU':'CHƯA ĐẠT YÊU CẦU'}</span>
+  <div class="ntrule">Mức đạt yêu cầu: trả lời đúng từ ${pct}% tổng số câu trở lên (≥ ${need}/${g.n} câu) – CV số 433-CV/ĐU ngày 20/11/2026${EX.auto?' · <span class="err-t">Hết giờ – tự động nộp</span>':''}</div>
+  ${g.by&&Object.keys(g.by).length>1?`<table class="ntby">${Object.entries(g.by).map(([t,v])=>`<tr><td>📘 ${esc(t||'Khác')}</td><td>${v[0]}/${v[1]}</td></tr>`).join('')}</table>`:''}
+  <div class="quote" style="font-size:16px">${g.pass?'Cảm ơn đồng chí đã hoàn thành đánh giá nhận thức. Đề nghị đồng chí khai phiếu bên dưới để chi bộ nhận xét, xác nhận hoàn thành học tập.':'Đề nghị đồng chí nghiên cứu lại những nội dung cốt lõi, điểm mới của Nghị quyết (nhất là văn bản có tỷ lệ đúng thấp ở bảng trên); chi bộ sẽ hướng dẫn, giải thích và tổ chức đánh giá lại.'}</div>
+  ${API&&!EX.kin?'<div class="sync noprint" id="sync"></div>':''}
+  <div class="noprint"><button class="btn ghost" onclick="home()">🏠 Về trang đầu</button>${g.pass?'':`<button class="btn gold" onclick="ntRetry()">↻ Làm lại bài đánh giá</button>`}</div></div>
+ ${g.pass?pfForm(g):''}</div>`;scrollTo({top:0});
+ if(API&&!EX.kin)syncUI();sfx('bell');if(g.pass)pfBind(g);
+}
+function ntRetry(){SEL=EX.exam.id;LS.set('dt_lastex',SEL);home();setTimeout(exStart,50)}
+/* ---- Phiếu đánh giá, xác nhận hoàn thành học tập: 3 nội dung theo mục 3.2 CV 433-CV/ĐU ---- */
+function pfForm(g){const d=LS.get('dt_pf',{}),cb=d.cb||DB.set.pcb||'';
+ return `<div class="panel noprint" id="pfp"><div class="h3">📝 Phiếu đánh giá, xác nhận hoàn thành học tập</div>
+ <div class="note">Xác nhận hoàn thành học tập căn cứ 3 nội dung: (i) tham gia học tập hoặc học bù; (ii) hoàn thành đánh giá nhận thức, đạt mức yêu cầu; (iii) vận dụng nội dung nghị quyết vào vị trí việc làm, chức trách, nhiệm vụ. Đồng chí khai (i) và (iii); <b>chi bộ nhận xét, ký xác nhận</b> – kết quả trắc nghiệm không phải căn cứ duy nhất.</div>
+ <div class="row" style="margin-top:6px"><div><label class="lb">Chi bộ</label><input class="inp" id="pcb" maxlength="120" value="${esc(cb)}"></div>
+  <div><label class="lb">Chức vụ / vị trí việc làm *</label><input class="inp" id="pcv" maxlength="120" value="${esc(d.cv||EX.unit||'')}" placeholder="VD: Kiểm sát viên, kiểm sát giải quyết án dân sự"></div></div>
+ <label class="lb">(i) Tham gia học tập, quán triệt *</label>
+ <div class="pfi"><label class="chk"><input type="radio" name="phoc" value="hn" ${d.hoc!=='hb'?'checked':''}> Dự Hội nghị học tập, quán triệt</label><label class="chk"><input type="radio" name="phoc" value="hb" ${d.hoc==='hb'?'checked':''}> Học bù tại chi bộ</label>
+  <label class="chk">Ngày <input class="inp" type="date" id="pngay" value="${esc(d.ngay||'')}" style="width:auto;padding:6px 8px"></label></div>
+ <label class="lb">(ii) Đánh giá nhận thức</label><div class="ok-t" style="font-weight:800">Đạt yêu cầu – đúng ${g.ok}/${g.n} câu (${vnum(g.ok/g.n*100,1)}%), trắc nghiệm trên máy tính ngày ${new Date().toLocaleDateString('vi-VN')}</div>
+ <label class="lb">(iii) Vận dụng nội dung Nghị quyết vào vị trí việc làm, chức trách, nhiệm vụ của bản thân *</label>
+ <textarea class="inp" id="pvd" maxlength="1500" rows="5" placeholder="Nêu 1–3 việc làm cụ thể, có sản phẩm, thời hạn. VD: Kiểm sát 100% bản án, quyết định dân sự trong thời hạn; đề xuất kháng nghị đúng căn cứ; áp dụng nguyên tắc “quyền hạn đến đâu, trách nhiệm đến đó” khi tham mưu…">${esc(d.vd||'')}</textarea>
+ <div class="note" id="pmsg" style="margin-top:6px"></div>
+ <div style="margin-top:8px">${hasCap('phieu')?'<button class="btn blue" id="psend">📤 Gửi phiếu về chi bộ</button>':''}<button class="btn gold" id="pprint">🖨 In phiếu</button></div></div>`}
+function pfData(){const d={cb:$('#pcb').value.trim(),cv:$('#pcv').value.trim(),hoc:(document.querySelector('input[name=phoc]:checked')||{}).value||'hn',ngay:$('#pngay').value,vd:$('#pvd').value.trim()};LS.set('dt_pf',d);return d}
+function pfCheck(d){const m=!d.cv?'Nhập <b>chức vụ / vị trí việc làm</b>.':d.vd.length<30?'Nội dung (iii) vận dụng còn quá ngắn – nêu ít nhất 1 việc làm cụ thể.':'';if(m){$('#pmsg').innerHTML='<span class="err-t">⚠ '+m+'</span>';return false}return true}
+const hocTxt=d=>(d.hoc==='hb'?'Học bù tại chi bộ':'Dự Hội nghị học tập, quán triệt')+(d.ngay?' ngày '+d.ngay.split('-').reverse().join('/'):'');
+function pfBind(g){['pcb','pcv','pngay','pvd'].forEach(id=>$('#'+id).onchange=pfData);
+ $('#pprint').onclick=()=>{const d=pfData();if(!pfCheck(d))return;pfPrint(g,d)};
+ const s=$('#psend');if(s)s.onclick=async()=>{const d=pfData();if(!pfCheck(d))return;s.disabled=true;$('#pmsg').textContent='⏳ Đang gửi phiếu…';let j;
+  try{j=await apiPost({action:'phieu',r:{id:EX.rid,name:EX.name,unit:EX.unit,exam:EX.exam.name,cb:d.cb,cv:d.cv,hoc:hocTxt(d),vd:d.vd}},30000)}catch(e){}
+  s.disabled=false;$('#pmsg').innerHTML=j&&j.ok?'<span class="ok-t">✔ Đã gửi phiếu về chi bộ (có thể sửa và gửi lại; bản sau thay bản trước). Nhớ in phiếu để ký.</span>':'<span class="err-t">⚠ '+esc(j&&j.err||'Chưa gửi được (kiểm tra mạng) – bấm gửi lại.')+'</span>'}}
+function pfPrint(g,d){
+ const dt=new Date(),u=s=>esc(String(s||'').toUpperCase());
+ let pp=$('#pp');if(!pp){pp=document.createElement('div');pp.id='pp';document.body.appendChild(pp)}
+ pp.innerHTML=`<table class="hd"><tr><td style="width:46%">${u(DB.set.ptop)}<br><b>${u(d.cb||DB.set.pcb)}</b><br>*</td>
+  <td><b style="text-decoration:underline">ĐẢNG CỘNG SẢN VIỆT NAM</b><br><br><i>Đắk Lắk, ngày ${dt.getDate()} tháng ${dt.getMonth()+1} năm ${dt.getFullYear()}</i></td></tr></table>
+ <div class="tt">PHIẾU ĐÁNH GIÁ, XÁC NHẬN HOÀN THÀNH HỌC TẬP</div>
+ <div style="text-align:center;font-weight:bold">Nghị quyết Hội nghị lần thứ tư Ban Chấp hành Trung ương Đảng khóa XIV</div>
+ <div style="text-align:center;font-style:italic;margin:2px 0 10px">(Theo Công văn số 433-CV/ĐU ngày 20/11/2026 của Ban Thường vụ Đảng ủy Viện kiểm sát nhân dân tỉnh)</div>
+ <p>Họ và tên đảng viên: <b>${esc(EX.name)}</b></p><p>Chức vụ, vị trí việc làm: ${esc(d.cv)}</p><p style="margin-bottom:8px">Sinh hoạt tại: ${esc(d.cb||DB.set.pcb)}</p>
+ <table class="bd"><tr><th style="width:6%">TT</th><th style="width:30%">Nội dung xác nhận</th><th>Kết quả (đảng viên tự khai, hệ thống ghi nhận)</th><th style="width:22%">Nhận xét của chi bộ</th></tr>
+ <tr><td>1</td><td>(i) Tham gia học tập, quán triệt hoặc học bù</td><td>${esc(hocTxt(d))}</td><td></td></tr>
+ <tr><td>2</td><td>(ii) Hoàn thành đánh giá nhận thức và đạt mức yêu cầu (từ ${EX.pct||70}% tổng số câu trả lời đúng trở lên)</td><td>Trắc nghiệm trên máy tính ngày ${dt.toLocaleDateString('vi-VN')}: đúng ${g.ok}/${g.n} câu (${vnum(g.ok/g.n*100,1)}%) – <b>Đạt yêu cầu</b></td><td></td></tr>
+ <tr><td>3</td><td>(iii) Vận dụng nội dung nghị quyết vào vị trí việc làm, chức trách, nhiệm vụ của bản thân</td><td style="white-space:pre-line">${esc(d.vd)}</td><td></td></tr></table>
+ <p style="margin-top:10px"><b>Kết luận của chi bộ:</b> ☐ Hoàn thành học tập &nbsp;&nbsp;&nbsp; ☐ Chưa hoàn thành học tập</p>
+ <table class="sg"><tr><td style="width:50%"><b>ĐẢNG VIÊN</b><br><i>(Ký, ghi rõ họ tên)</i><br><br><br><br>${esc(EX.name)}</td><td><b>T/M CHI BỘ</b><br><b>BÍ THƯ</b><br><i>(Ký, ghi rõ họ tên)</i></td></tr></table>
+ <p style="font-size:10pt;color:#444;margin-top:14px">Mã bài: ${esc(EX.rid||'')}</p>`;
+ document.body.classList.add('pp');const off=()=>{document.body.classList.remove('pp');removeEventListener('afterprint',off)};addEventListener('afterprint',off);
+ setTimeout(()=>{print();setTimeout(()=>document.addEventListener('pointerdown',off,{once:true}),800)},60)}
 function exResult(r){
  stopT();music(null);BG.ts=2;
  const pct=r.ok/r.n,tier=pct>=.9?'top':pct>=.7?'good':pct>=.5?'mid':'low',icon={top:'🏆',good:'🥇',mid:'🥈',low:'🎯'}[tier];
@@ -569,6 +711,7 @@ function exResult(r){
 let S={};
 async function gameStart(){
  const p=me();if(!p)return;const e=DB.exams.find(x=>x.id===SEL);if(!e)return;const pool=poolFor(e);if(pool.length<2)return;
+ if(isNT(e)||pool.some(q=>q.x===1)){uiAlert('Cuộc thi đánh giá nhận thức không có chế độ luyện tập dạng trò chơi.');return}
  const n=Math.min(e.n,pool.length,20);
  S={name:p.name,n,T:20,score:0,streak:0,maxStreak:0,ok:0,qi:0,step:0,dbl:false,pu:{f:1,x:1,t:1},wrong:[],pool,
   qs:shuf(pool).slice(0,n).map(q=>{const idx=shuf(q.o.map((_,i)=>i));return{q:q.q,ref:q.ref||'',o:idx.map(i=>q.o[i]),a:idx.indexOf(q.a)}})};
@@ -673,7 +816,7 @@ function rowsToQs(rows,defCat,report){
  let h=-1;for(let i=0;i<Math.min(rows.length,15);i++){if((rows[i]||[]).some(c=>norm(c).includes('cau hoi'))){h=i;break}}
  if(h<0)throw new Error('Không tìm thấy dòng tiêu đề có cột “Câu hỏi”. Hãy dùng file mẫu.');
  const H=rows[h].map(norm),find=re=>H.findIndex(x=>re.test(x));
- const c={cat:find(/linh vuc/),topic:find(/chu de/),q:find(/cau hoi/),a:find(/dap an dung|dap an chinh xac|^dung$/),ref:find(/can cu/)};
+ const c={cat:find(/linh vuc/),topic:find(/chu de/),q:find(/cau hoi/),a:find(/dap an dung|dap an chinh xac|^dung$/),ref:find(/can cu/),id:find(/^ma cau( hoi)?$/)};
  const opt=['a','b','c','d'].map(L=>H.findIndex(x=>new RegExp('^(dap an |phuong an |)'+L+'$').test(x)));
  if(opt.some(i=>i<0)||c.a<0)throw new Error('Thiếu cột Đáp án A/B/C/D hoặc cột “Đáp án đúng”.');
  const out=[];
@@ -682,9 +825,10 @@ function rowsToQs(rows,defCat,report){
   const av=g(c.a).toUpperCase();let a='ABCD'.indexOf(av[0]);if(a<0&&/^[1-4]$/.test(av))a=+av-1;
   if(oo.length<2||oo.some(x=>!x)||a<0||a>=oo.length){report.bad.push(r+1);continue}
   let cat=defCat;const cv=g(c.cat);
-  if(cv){const nc=norm(cv),hit=DB.cats.find(x=>norm(x.name)===nc||x.id===cv||norm(x.grp+' '+x.name)===nc||norm(x.name).includes(nc)&&nc.length>5);
+  if(cv&&/hntw4|trung uong 4|hoi nghi lan thu tu|hoi nghi trung uong lan thu tu/.test(norm(cv))){if(!DB.cats.some(x=>x.id==='hntw4'))DB.cats.push({...DEF_CATS.find(x=>x.id==='hntw4')});cat='hntw4'}
+  else if(cv){const nc=norm(cv),hit=DB.cats.find(x=>norm(x.name)===nc||x.id===cv||norm(x.grp+' '+x.name)===nc||norm(x.name).includes(nc)&&nc.length>5);
    if(hit)cat=hit.id;else{const id='c'+uid();DB.cats.push({id,name:cv,grp:'Khác'});report.newCats.push(cv);cat=id}}
-  out.push({id:uid(),cat,topic:g(c.topic),q,o:oo,a,ref:g(c.ref)})}
+  out.push({id:g(c.id).replace(/[^\w.-]/g,'').slice(0,40)||uid(),cat,topic:g(c.topic),q,o:oo,a,ref:g(c.ref)})}
  return out;
 }
 async function importFile(file,defCat,mode){
@@ -697,13 +841,19 @@ async function importFile(file,defCat,mode){
   arr.forEach((x,i)=>{if(x&&x.q&&Array.isArray(x.o)&&x.o.length>=2&&x.a>=0&&x.a<x.o.length)qs.push({id:x.id||uid(),cat:x.cat&&DB.cats.some(c=>c.id===x.cat)?x.cat:defCat,topic:x.topic||'',q:String(x.q),o:x.o.map(String),a:x.a|0,ref:x.ref||''});else report.bad.push(i+1)})}
  else throw new Error('Chỉ nhận file .xlsx, .csv, .json hoặc .txt');
  if(!qs.length)throw new Error('Không có câu hỏi hợp lệ trong file.');
- let added=0,dup=0;
+ let added=0,dup=0,upd=0;
  if(mode==='all')DB.bank=[];
  if(mode==='cats'){const cs=new Set(qs.map(q=>q.cat));DB.bank=DB.bank.filter(q=>!cs.has(q.cat))}
  const seen=new Set(DB.bank.map(q=>q.cat+'|'+norm(q.q)+'|'+norm(q.o[q.a])));
- for(const q of qs){const k=q.cat+'|'+norm(q.q)+'|'+norm(q.o[q.a]);if(seen.has(k)){dup++;continue}seen.add(k);DB.bank.push(q);added++}
- save('bank');save('cats');
- return {added,dup,bad:report.bad,newCats:report.newCats,total:qs.length};
+ /* câu cùng mã, hoặc câu đang bị ẩn đáp án (chấm kín) cùng nội dung → cập nhật tại chỗ, giữ mã câu */
+ const byId=new Map(DB.bank.map((q,i)=>[q.id,i])),qk=q=>q.cat+'|'+norm(q.q),hid=new Map();DB.bank.forEach((q,i)=>{if(q.x===1)hid.set(qk(q),i)});
+ for(const q of qs){
+  if(byId.has(q.id)){const i=byId.get(q.id),o=DB.bank[i];if(o.x===1||o.a!==q.a||norm(o.q)!==norm(q.q)||o.o.join('|')!==q.o.join('|')){DB.bank[i]=q;upd++}else dup++;continue}
+  if(hid.has(qk(q))){const i=hid.get(qk(q));DB.bank[i]={...q,id:DB.bank[i].id};hid.delete(qk(q));upd++;continue}
+  const k=q.cat+'|'+norm(q.q)+'|'+norm(q.o[q.a]);if(seen.has(k)){dup++;continue}seen.add(k);DB.bank.push(q);added++}
+ const ntMade=qs.some(q=>q.cat==='hntw4')&&ensureNT();
+ save('bank');save('cats');if(ntMade)save('exams');
+ return {added,dup,upd,bad:report.bad,newCats:report.newCats,total:qs.length,ntMade};
 }
 
 /* ================= GIAO DIỆN NGƯỜI THIẾT LẬP ================= */
@@ -717,14 +867,19 @@ async function adminLogin(){
   const done=busy('Đang xác thực với máy chủ…');let j;try{j=await apiPost({action:'ping',key:k},20000)}catch(e){}finally{done()}
   if(!j){uiAlert('⚠ Không kết nối được máy chủ. Kiểm tra mạng và địa chỉ <b>api</b> trong config.js.');return}
   if(!j.ok){NET.key='';try{sessionStorage.removeItem('dt_k')}catch(e){}uiAlert('❌ '+esc(j.err||'Không xác thực được.'));return}
-  NET.key=k;NET.ok=true;try{sessionStorage.setItem('dt_k',k)}catch(e){}
-  if(NET.srv===null)try{const g=await apiGet();if(g&&g.ok)NET.srv=g.ver||0}catch(e){}
+  NET.key=k;NET.ok=true;try{sessionStorage.setItem('dt_k',k)}catch(e){}if(j.cap)setCap(j);
+  if(NET.srv===null)try{const g=await apiGet();if(g&&g.ok){NET.srv=g.ver||0;setCap(g)}}catch(e){}
+  /* máy này đang giữ bản đề đã ẩn đáp án (bản cho người thi) → tải bản đầy đủ kèm đáp án cho người thiết lập */
+  if(hasCap('kin')&&!NET.dirty&&DB.bank.some(q=>q.x===1)){const d2=busy('Đang tải đáp án các cuộc thi chấm kín…');try{const f=await pullFull();if(f&&f.ver&&f.data){applyPub(f.data,f.ver);NET.srv=f.ver}}finally{d2()}}
   ADM=true;admin('exams');askNewPacks();return}
  const p=await uiPrompt('🔐 Nhập <b>mã PIN</b> người thiết lập'+(DB.set.pinDefault?'<div class="note">Mã mặc định: 1234 – hãy đổi ngay trong mục Cài đặt.</div>':''),'password');
  if(p===null)return;if(hash(p)!==DB.set.pin){uiAlert('❌ Mã PIN không đúng.');return}
  ADM=true;admin('exams');askNewPacks();
 }
-async function admOut(){if(API&&NET.dirty&&!await uiConfirm('Có thay đổi <b>chưa công bố</b> lên máy chủ – người thi sẽ chưa thấy. Vẫn thoát?','Vẫn thoát','Ở lại'))return;ADM=false;NET.key='';try{sessionStorage.removeItem('dt_k')}catch(e){}home()}
+async function admOut(){if(API&&NET.dirty&&!await uiConfirm('Có thay đổi <b>chưa công bố</b> lên máy chủ – người thi sẽ chưa thấy. Vẫn thoát?','Vẫn thoát','Ở lại'))return;ADM=false;NET.key='';try{sessionStorage.removeItem('dt_k')}catch(e){}
+ /* thoát: thay bản kèm đáp án bằng bản dành cho người thi (đáp án chấm kín không lưu lại trên máy) */
+ if(hasCap('kin')&&!NET.dirty&&DB.exams.some(e=>e.kin)){const d=busy('Đang xóa đáp án chấm kín khỏi máy này…');try{const g=await apiGet();if(g&&g.ok&&g.ver&&g.data)applyPub(g.data,g.ver)}catch(e){}finally{d()}}
+ home()}
 function admin(tab){
  ATAB=tab;const T=[['exams','📝 Cuộc thi'],['bank','🗂️ Ngân hàng câu hỏi'],['res','📊 Kết quả thi'],['set','⚙ Cài đặt']];
  view(`<div class="enter"><div class="title3d sm">⚙ NGƯỜI THIẾT LẬP</div>
@@ -741,18 +896,24 @@ function aExams(){
   <div><label class="lb">Số câu hỏi</label><input class="inp" type="number" min="1" max="200" data-i="${i}" data-k="n" value="${e.n}"></div>
   <div><label class="lb">Thời gian (phút)</label><input class="inp" type="number" min="1" max="300" data-i="${i}" data-k="min" value="${e.min}"></div>
   <div><label class="lb">Lọc chủ đề (tùy chọn)</label><input class="inp" data-i="${i}" data-k="topic" value="${esc(e.topic||'')}" placeholder="để trống = tất cả"></div></div>
+  ${isNT(e)?`<div style="margin:8px 0;padding:8px 10px;border-radius:10px;background:rgba(247,201,72,.1);border:1px solid rgba(247,201,72,.4)">
+   <b>🎓 Chế độ đánh giá nhận thức</b> <span class="note">– mỗi lượt rút ngẫu nhiên số câu đã đặt, chia đều theo từng văn bản; giữ nguyên thứ tự câu, phương án; không quy đổi điểm, không xếp loại, không hiện đáp án, không trò chơi; người chưa đạt được làm lại; sau khi đạt, đảng viên khai phiếu xác nhận 3 nội dung.</span>
+   <div class="row" style="grid-template-columns:200px 1fr;align-items:end;margin-top:4px"><div><label class="lb">Mức đạt yêu cầu (% số câu đúng)</label><input class="inp" type="number" min="1" max="100" data-i="${i}" data-k="passPct" value="${e.passPct||70}"></div>
+   <label class="chk" style="padding-bottom:10px"><input type="checkbox" data-i="${i}" data-k="kin" ${e.kin?'checked':''}> 🔒 Chấm kín trên máy chủ (không gửi đáp án về máy người thi${API&&!hasCap('kin')?' – <span class="err-t">máy chủ chưa hỗ trợ, cần cập nhật Code.gs</span>':''})</label></div></div>`:''}
   <label class="lb">Lĩnh vực lấy câu hỏi</label>${DB.cats.map(c=>`<label class="chk"><input type="checkbox" data-i="${i}" data-cat="${c.id}" ${e.cats.includes(c.id)?'checked':''}> ${esc(c.grp&&c.grp!==c.name?c.grp+' – ':'')}${esc(c.name)}</label>`).join('')}
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-top:6px">
    <label class="chk"><input type="checkbox" data-i="${i}" data-k="on" ${e.on?'checked':''}> <b>Mở cho người thi</b></label>
    <span class="${p>=e.n?'ok-t':'err-t'}" style="font-size:13px">Có sẵn ${p} câu${p<e.n?` – thiếu, chỉ thi được ${p} câu`:''}</span>
    <button class="btn red sm" data-del="${i}">🗑 Xóa</button></div></div>`}).join('')}
- <button class="btn blue" id="addEx">➕ Thêm cuộc thi</button></div>`;
+ <button class="btn blue" id="addEx">➕ Thêm cuộc thi</button>${DB.exams.some(e=>isNT(e)&&e.cats.includes('hntw4'))?'':'<button class="btn orange" id="addNT">🎓 Thêm cuộc thi đánh giá nhận thức NQ HNTW4</button>'}</div>`;
  el.onchange=e=>{const t=e.target,i=t.dataset.i;if(i===undefined)return;const ex=DB.exams[+i];
   if(t.dataset.cat){const c=t.dataset.cat;ex.cats=t.checked?[...new Set([...ex.cats,c])]:ex.cats.filter(x=>x!==c)}
-  else if(t.dataset.k==='on')ex.on=t.checked;else if(t.dataset.k==='n'||t.dataset.k==='min')ex[t.dataset.k]=Math.max(1,+t.value||1);else ex[t.dataset.k]=t.value.trim();
+  else if(t.dataset.k==='on'||t.dataset.k==='kin')ex[t.dataset.k]=t.checked;else if(t.dataset.k==='passPct')ex.passPct=Math.min(100,Math.max(1,Math.round(+t.value||70)));
+  else if(t.dataset.k==='n'||t.dataset.k==='min')ex[t.dataset.k]=Math.max(1,+t.value||1);else ex[t.dataset.k]=t.value.trim();
   save('exams');aExams()};
  el.onclick=async e=>{const d=e.target.closest('[data-del]');if(d){if(await uiConfirm('Xóa cuộc thi “'+esc(DB.exams[+d.dataset.del].name)+'”? (Không xóa câu hỏi)')){DB.exams.splice(+d.dataset.del,1);save('exams');aExams()}}
-  if(e.target.id==='addEx'){DB.exams.push({id:'e'+uid(),name:'Cuộc thi mới',cats:[DB.cats[0].id],topic:'',n:20,min:30,on:false});save('exams');aExams()}};
+  if(e.target.id==='addEx'){DB.exams.push({id:'e'+uid(),name:'Cuộc thi mới',cats:[DB.cats[0].id],topic:'',n:20,min:30,on:false});save('exams');aExams()}
+  if(e.target.id==='addNT'){ensureNT();save('cats');save('exams');aExams();if(!DB.bank.some(q=>q.cat==='hntw4'))uiAlert('Đã tạo cuộc thi. Tiếp theo: thẻ 🗂️ Ngân hàng câu hỏi → nạp file <b>HNTW4_77cau_co-dap-an.xlsx</b> (hoặc .json).')}};
 }
 function aBank(){
  const el=$('#at'),cnt=id=>DB.bank.filter(q=>q.cat===id).length;
@@ -774,7 +935,7 @@ function aBank(){
  const go=async f=>{if(!f)return;const md=$('#md').value;
   if(md!=='add'&&!await uiConfirm(md==='all'?'⚠ Thay <b>toàn bộ</b> ngân hàng hiện tại bằng nội dung file?':'⚠ Các câu hỏi cũ thuộc lĩnh vực có trong file sẽ bị thay thế. Tiếp tục?'))return;
   $('#ir').textContent='Đang đọc '+f.name+'...';
-  try{const r=await importFile(f,$('#dc').value,md);await uiAlert(`✔ Nạp xong <b>${esc(f.name)}</b><br>• Thêm mới: <b>${r.added}</b> câu<br>• Trùng, bỏ qua: ${r.dup}<br>${r.bad.length?`• Dòng lỗi, bỏ qua: ${r.bad.length} (dòng ${r.bad.slice(0,15).join(', ')}${r.bad.length>15?'…':''})<br>`:''}${r.newCats.length?`• Tạo lĩnh vực mới: ${esc([...new Set(r.newCats)].join(', '))}`:''}`);aBank()}
+  try{const r=await importFile(f,$('#dc').value,md);await uiAlert(`✔ Nạp xong <b>${esc(f.name)}</b><br>• Thêm mới: <b>${r.added}</b> câu<br>${r.upd?`• Cập nhật (cùng mã câu / bổ sung đáp án): ${r.upd} câu<br>`:''}• Trùng, bỏ qua: ${r.dup}<br>${r.ntMade?`• Đã tạo cuộc thi <b>${esc(NT_PRESET.name)}</b> (${NT_PRESET.n} câu, ${NT_PRESET.min} phút, đạt ≥ ${NT_PRESET.passPct}%, chấm kín) – xem thẻ 📝 Cuộc thi.<br>`:''}${r.bad.length?`• Dòng lỗi, bỏ qua: ${r.bad.length} (dòng ${r.bad.slice(0,15).join(', ')}${r.bad.length>15?'…':''})<br>`:''}${r.newCats.length?`• Tạo lĩnh vực mới: ${esc([...new Set(r.newCats)].join(', '))}`:''}`);aBank()}
   catch(e){$('#ir').innerHTML='<span class="err-t">⚠ '+esc(e.message)+'</span>'}};
  drop.ondrop=e=>{e.preventDefault();drop.classList.remove('over');go(e.dataTransfer.files[0])};fi.onchange=()=>{go(fi.files[0]);fi.value=''};
  const draw=()=>editor($('#ed'),DB.bank,$('#fc').value);$('#fc').onchange=draw;
@@ -791,7 +952,7 @@ function editor(el,arr,cat){
   idx.slice(st.p*P,st.p*P+P).map(i=>{const q=arr[i];return`<div class="qedit"><div class="hd"><b>#${i+1}</b>
    <select class="inp" style="width:auto" data-i="${i}" data-k="cat">${DB.cats.map(c=>`<option value="${c.id}" ${c.id===q.cat?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
    <input class="inp" style="flex:1;min-width:140px" data-i="${i}" data-k="topic" value="${esc(q.topic||'')}" placeholder="Chủ đề">
-   <button class="btn red sm" data-del="${i}">🗑</button></div>
+   ${q.x===1?'<span class="tag" style="background:#b45309" title="Máy chủ giữ đáp án; đăng nhập bằng khóa quản trị khi có mạng để tải về, hoặc chọn lại đáp án đúng">🔒 đáp án lưu trên máy chủ</span>':''}<button class="btn red sm" data-del="${i}">🗑</button></div>
    <textarea class="inp" data-i="${i}" data-k="q">${esc(q.q)}</textarea>
    ${[0,1,2,3].map(k=>`<div class="op"><input type="radio" name="r${q.id}" data-i="${i}" data-a="${k}" ${q.a===k?'checked':''} title="Đáp án đúng"><b>${'ABCD'[k]}</b><input class="inp" data-i="${i}" data-o="${k}" value="${esc(q.o[k]||'')}"></div>`).join('')}
    <input class="inp" data-i="${i}" data-k="ref" value="${esc(q.ref||'')}" placeholder="Căn cứ: Điều …, khoản …" style="margin-top:4px"></div>`}).join('')+pager;
@@ -801,12 +962,19 @@ function editor(el,arr,cat){
   if(t.dataset.pg){st.p+=+t.dataset.pg;draw();el.scrollIntoView({behavior:'smooth'})}
   else if(await uiConfirm('Xóa câu hỏi này?')){arr.splice(+t.dataset.del,1);save('bank');draw()}};
  el.onchange=e=>{const t=e.target,i=t.dataset.i;if(i===undefined)return;const q=arr[+i];
-  if(t.dataset.k)q[t.dataset.k]=t.value;else if(t.dataset.o!==undefined){q.o[+t.dataset.o]=t.value;q.o=q.o.slice(0,4)}else if(t.dataset.a!==undefined)q.a=+t.dataset.a;
+  if(t.dataset.k)q[t.dataset.k]=t.value;else if(t.dataset.o!==undefined){q.o[+t.dataset.o]=t.value;q.o=q.o.slice(0,4)}else if(t.dataset.a!==undefined){q.a=+t.dataset.a;delete q.x}
   while(q.o.length&&!q.o[q.o.length-1]&&q.o.length>q.a+1)q.o.pop();save('bank')};
  draw();
 }
 const RESH=['STT','Thời gian','Họ và tên','Đơn vị','Cuộc thi','Số câu đúng','Tổng số câu','Điểm (thang 10)','Kết quả','Thời gian làm bài','Ghi chú'];
 const isPass=r=>r.pass??(r.score>=DB.set.pass);
+/* cuộc thi đánh giá nhận thức: hiện tỷ lệ % số câu đúng thay cho điểm */
+const scoreCell=r=>DB.exams.some(e=>isNT(e)&&e.name===r.exam)&&r.n?vnum(r.ok/r.n*100,1)+'%':vnum(r.score);
+const PH_H=['STT','Thời gian gửi','Họ và tên','Chức vụ / vị trí việc làm','Chi bộ','Cuộc thi','(i) Tham gia học tập','(ii) Số câu đúng','Tổng số câu','Tỷ lệ đúng (%)','Đánh giá nhận thức','(iii) Nội dung vận dụng','Mã bài'];
+async function phieuXlsx(){const done=busy('Đang tải phiếu từ máy chủ…');let j;try{j=await apiPost({action:'phieus',key:NET.key},60000)}catch(e){}finally{done()}
+ if(!j||!j.ok){uiAlert('❌ '+esc(j&&j.err||'Không tải được phiếu (kiểm tra mạng).'));return}
+ if(!j.rows.length){uiAlert('Chưa có phiếu nào được gửi.');return}
+ dlBytes('phieu-xac-nhan-hoc-tap-'+today()+'.xlsx',xlsxBytes([PH_H,...j.rows.map((r,i)=>[i+1,new Date(r.t).toLocaleString('vi-VN'),r.name,r.cv,r.cb,r.exam,r.hoc,r.ok,r.n,r.pct,r.kq,r.vd,r.id])],[6,18,24,26,26,30,28,10,10,10,14,60,14]),'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')}
 function resXlsx(res,name){dlBytes(name+'.xlsx',xlsxBytes([RESH,...res.map((r,i)=>[i+1,new Date(r.t).toLocaleString('vi-VN'),r.name,r.unit||'',r.exam,r.ok,r.n,r.score,isPass(r)?'Đạt':'Chưa đạt',fmtT(r.dur),r.auto?'Hết giờ, tự nộp':''])],[6,20,26,24,30,10,10,12,10,12,16]),'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')}
 const SRV={rows:null,f:{exam:'',q:'',best:false,sort:'t'}};
 async function srvRes(reload){
@@ -824,14 +992,14 @@ function drawSrv(){
  rows.sort(f.sort==='s'?(a,b)=>b.score-a.score||a.dur-b.dur:(a,b)=>String(b.t).localeCompare(String(a.t)));
  const ppl=new Set(rows.map(r=>r.k)).size,avg=rows.length?rows.reduce((s,r)=>s+r.score,0)/rows.length:0,ps=rows.filter(r=>r.pass).length;
  box.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div class="h3">☁ Kết quả tổng hợp trên máy chủ</div>
-  <div><button class="btn ghost sm" onclick="srvRes(1)">↻ Tải lại</button><button class="btn blue sm" id="sx" ${rows.length?'':'disabled'}>⬇ Xuất Excel</button>${/^https:\/\//.test(CFG.sheet||'')?`<a class="btn purple sm" href="${esc(CFG.sheet)}" target="_blank" rel="noopener">📗 Mở Google Sheet</a>`:''}</div></div>
+  <div><button class="btn ghost sm" onclick="srvRes(1)">↻ Tải lại</button><button class="btn blue sm" id="sx" ${rows.length?'':'disabled'}>⬇ Xuất Excel</button>${hasCap('phieu')?'<button class="btn orange sm" onclick="phieuXlsx()">⬇ Phiếu xác nhận học tập</button>':''}${/^https:\/\//.test(CFG.sheet||'')?`<a class="btn purple sm" href="${esc(CFG.sheet)}" target="_blank" rel="noopener">📗 Mở Google Sheet</a>`:''}</div></div>
   <div class="row" style="align-items:end">
    <div><label class="lb">Cuộc thi</label><select class="inp" id="fe"><option value="">Tất cả cuộc thi (${SRV.rows.length} lượt)</option>${exams.map(x=>`<option ${x===f.exam?'selected':''}>${esc(x)}</option>`).join('')}</select></div>
    <div><label class="lb">Tìm người thi / đơn vị</label><input class="inp" id="fq" value="${esc(f.q)}" placeholder="🔎 Họ tên, đơn vị…"></div>
    <div><label class="lb">Sắp xếp</label><select class="inp" id="fo"><option value="t">Mới nhất trước</option><option value="s" ${f.sort==='s'?'selected':''}>Điểm cao → thấp (xếp hạng)</option></select></div>
    <label class="chk" style="padding-bottom:10px"><input type="checkbox" id="fb" ${f.best?'checked':''}> Mỗi người chỉ lấy lượt cao nhất</label></div>
   <div class="chips" style="justify-content:flex-start;margin:12px 0"><span class="chip">📝 ${rows.length} lượt</span><span class="chip">👥 ${ppl} người</span><span class="chip">⭐ Điểm TB ${vnum(avg)}</span><span class="chip">✔ Đạt ${rows.length?Math.round(ps/rows.length*100):0}%</span></div>
-  ${rows.length?`<div style="overflow:auto"><table class="tb"><tr><th>#</th><th>Thời gian</th><th>Họ tên</th><th>Đơn vị</th><th>Cuộc thi</th><th>Đúng</th><th>Điểm</th><th>Kết quả</th><th>Làm bài</th></tr>${rows.slice(0,500).map((r,i)=>`<tr><td>${f.sort==='s'?(['🥇','🥈','🥉'][i]||i+1):i+1}</td><td>${new Date(r.t).toLocaleString('vi-VN')}</td><td><b>${esc(r.name)}</b></td><td>${esc(r.unit)}</td><td>${esc(r.exam)}</td><td>${r.ok}/${r.n}</td><td style="color:var(--gold);font-weight:800">${vnum(r.score)}</td><td>${r.pass?'<span class="ok-t">Đạt</span>':'<span class="err-t">Chưa đạt</span>'}</td><td>${fmtT(r.dur)}${r.auto?' ⌛':''}</td></tr>`).join('')}</table></div>${rows.length>500?'<div class="note">Hiển thị 500 dòng – xuất Excel để xem đủ.</div>':''}`:'<p class="note">Chưa có kết quả phù hợp.</p>'}`;
+  ${rows.length?`<div style="overflow:auto"><table class="tb"><tr><th>#</th><th>Thời gian</th><th>Họ tên</th><th>Đơn vị</th><th>Cuộc thi</th><th>Đúng</th><th>Điểm</th><th>Kết quả</th><th>Làm bài</th></tr>${rows.slice(0,500).map((r,i)=>`<tr><td>${f.sort==='s'?(['🥇','🥈','🥉'][i]||i+1):i+1}</td><td>${new Date(r.t).toLocaleString('vi-VN')}</td><td><b>${esc(r.name)}</b></td><td>${esc(r.unit)}</td><td>${esc(r.exam)}</td><td>${r.ok}/${r.n}</td><td style="color:var(--gold);font-weight:800">${scoreCell(r)}</td><td>${r.pass?'<span class="ok-t">Đạt</span>':'<span class="err-t">Chưa đạt</span>'}</td><td>${fmtT(r.dur)}${r.auto?' ⌛':''}</td></tr>`).join('')}</table></div>${rows.length>500?'<div class="note">Hiển thị 500 dòng – xuất Excel để xem đủ.</div>':''}`:'<p class="note">Chưa có kết quả phù hợp.</p>'}`;
  $('#fe').onchange=e=>{f.exam=e.target.value;drawSrv()};$('#fo').onchange=e=>{f.sort=e.target.value;drawSrv()};$('#fb').onchange=e=>{f.best=e.target.checked;drawSrv()};
  const fq=$('#fq');fq.oninput=()=>{f.q=fq.value;const p=fq.selectionStart;drawSrv();const n=$('#fq');n.focus();n.setSelectionRange(p,p)};
  if(rows.length)$('#sx').onclick=()=>resXlsx(rows,'ket-qua-tong-hop-'+today())}
@@ -839,7 +1007,7 @@ function aRes(){
  const res=LS.get('dt_results',[]),el=$('#at');
  el.innerHTML=(API?'<div class="panel" id="srv"></div>':'')+`<div class="panel"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div class="h3">📊 ${res.length} lượt thi lưu trên máy này</div>
  <div><button class="btn blue sm" id="xr" ${res.length?'':'disabled'}>⬇ Xuất Excel</button><button class="btn red sm" id="cr" ${res.length?'':'disabled'}>🗑 Xóa kết quả</button></div></div>
- ${res.length?`<div style="overflow:auto"><table class="tb"><tr><th>Thời gian</th><th>Họ tên</th><th>Đơn vị</th><th>Cuộc thi</th><th>Đúng</th><th>Điểm</th><th>Kết quả</th><th>Làm bài</th></tr>${res.slice(0,300).map(r=>`<tr><td>${new Date(r.t).toLocaleString('vi-VN')}</td><td><b>${esc(r.name)}</b></td><td>${esc(r.unit||'')}</td><td>${esc(r.exam)}</td><td>${r.ok}/${r.n}</td><td style="color:var(--gold);font-weight:800">${vnum(r.score)}</td><td>${isPass(r)?'<span class="ok-t">Đạt</span>':'<span class="err-t">Chưa đạt</span>'}</td><td>${fmtT(r.dur)}${r.auto?' ⌛':''}</td></tr>`).join('')}</table></div>${res.length>300?'<div class="note">Hiển thị 300 lượt gần nhất – xuất Excel để xem đủ.</div>':''}`:'<p class="note">Chưa có lượt thi nào.</p>'}
+ ${res.length?`<div style="overflow:auto"><table class="tb"><tr><th>Thời gian</th><th>Họ tên</th><th>Đơn vị</th><th>Cuộc thi</th><th>Đúng</th><th>Điểm</th><th>Kết quả</th><th>Làm bài</th></tr>${res.slice(0,300).map(r=>`<tr><td>${new Date(r.t).toLocaleString('vi-VN')}</td><td><b>${esc(r.name)}</b></td><td>${esc(r.unit||'')}</td><td>${esc(r.exam)}</td><td>${r.ok}/${r.n}</td><td style="color:var(--gold);font-weight:800">${scoreCell(r)}</td><td>${isPass(r)?'<span class="ok-t">Đạt</span>':'<span class="err-t">Chưa đạt</span>'}</td><td>${fmtT(r.dur)}${r.auto?' ⌛':''}</td></tr>`).join('')}</table></div>${res.length>300?'<div class="note">Hiển thị 300 lượt gần nhất – xuất Excel để xem đủ.</div>':''}`:'<p class="note">Chưa có lượt thi nào.</p>'}
  <div class="note" style="margin-top:8px">${API?'Đây là các lượt thi làm trên chính trình duyệt này (bản lưu dự phòng). Kết quả của mọi người thi xem ở bảng tổng hợp phía trên.':'Kết quả chỉ lưu trên trình duyệt của máy này. Khi tổ chức thi trên nhiều máy, xuất Excel ở từng máy rồi tổng hợp – hoặc triển khai chế độ trực tuyến (Hướng dẫn mục IV).'}</div></div>`;
  if(res.length){$('#xr').onclick=()=>resXlsx(res,'ket-qua-thi-'+today());
   $('#cr').onclick=async()=>{if(await uiConfirm('Xóa toàn bộ kết quả thi trên máy này? Nên xuất Excel trước.')){LS.set('dt_results',[]);aRes()}}}
@@ -850,6 +1018,9 @@ function aSet(){
  el.innerHTML=`<div class="panel"><div class="h3">⚙ Thiết lập chung</div><div class="row">
   <div><label class="lb">Tên đơn vị (hiện trên trang thi)</label><input class="inp" id="su" value="${esc(s.unit)}" placeholder="VD: Viện kiểm sát nhân dân khu vực …"></div>
   <div><label class="lb">Điểm đạt (thang điểm 10)</label><input class="inp" id="sp" type="number" step="0.5" min="0" max="10" value="${s.pass}"></div></div>
+  <div class="row" style="margin-top:4px"><div><label class="lb">Tổ chức đảng cấp trên (in trên phiếu xác nhận học tập)</label><input class="inp" id="spt" value="${esc(s.ptop||'')}"></div>
+  <div><label class="lb">Tên chi bộ mặc định (in trên phiếu)</label><input class="inp" id="spc" value="${esc(s.pcb||'')}"></div></div>
+  <div class="note">Điểm đạt thang 10 áp dụng cho các cuộc thi thường; cuộc thi đánh giá nhận thức dùng mức % số câu đúng đặt riêng ở thẻ Cuộc thi.</div>
   <div style="margin-top:10px"><label class="chk"><input type="checkbox" id="sa" ${s.showAns?'checked':''}> Hiện đáp án chi tiết sau khi nộp bài</label><br>
   <label class="chk"><input type="checkbox" id="ss" ${s.shuffle?'checked':''}> Xáo trộn thứ tự đáp án A–D</label><br>
   <label class="chk"><input type="checkbox" id="sm" ${s.music?'checked':''}> Nhạc nền nhẹ khi làm bài</label><br>
@@ -860,8 +1031,8 @@ function aSet(){
   <button class="btn blue sm" id="ac" style="margin-top:10px">➕ Thêm lĩnh vực</button></div>
  <div class="panel"><div class="h3">🔐 Bảo mật & dữ liệu</div>
   ${API?'':'<button class="btn purple sm" id="pin">Đổi mã PIN</button>'}<button class="btn ghost sm" id="rb">↺ Nạp lại các bộ câu hỏi gốc (${BUILTIN.length} câu)</button><button class="btn red sm" id="rs">⚠ Xóa toàn bộ dữ liệu trên máy này</button>
-  <div class="note" style="margin-top:8px">${API?`Chế độ trực tuyến: đăng nhập bằng <b>khóa quản trị</b> lưu trên máy chủ (đổi khóa: sửa KHOA_QUAN_TRI trong Code.gs rồi triển khai phiên bản mới). Máy chủ: <span style="word-break:break-all">${esc(API)}</span><br>Lưu ý: bộ câu hỏi kèm đáp án được tải về trình duyệt người thi – người rành kỹ thuật có thể xem được; không đưa nội dung mật, nội dung chưa công khai lên.`:'Mã PIN chỉ ngăn người thi vô tình mở phần thiết lập; dữ liệu nằm trên trình duyệt của máy, không phải biện pháp bảo mật tuyệt đối. Không đưa tài liệu mật vào ngân hàng câu hỏi.'}</div></div>`;
- $('#sv').onclick=()=>{Object.assign(s,{unit:$('#su').value.trim(),pass:Math.min(10,Math.max(0,+$('#sp').value||0)),showAns:$('#sa').checked,shuffle:$('#ss').checked,music:$('#sm').checked,game:$('#sg').checked});save('set');uiAlert('✔ Đã lưu thiết lập.')};
+  <div class="note" style="margin-top:8px">${API?`Chế độ trực tuyến: đăng nhập bằng <b>khóa quản trị</b> lưu trên máy chủ (đổi khóa: sửa KHOA_QUAN_TRI trong Code.gs rồi triển khai phiên bản mới). Máy chủ: <span style="word-break:break-all">${esc(API)}</span><br>Lưu ý: bộ câu hỏi kèm đáp án được tải về trình duyệt người thi – người rành kỹ thuật có thể xem được; không đưa nội dung mật, nội dung chưa công khai lên. Riêng cuộc thi đặt <b>🔒 chấm kín</b> (máy chủ Code.gs bản mới): đáp án chỉ lưu trên máy chủ${hasCap('kin')?' – máy chủ hiện <span class="ok-t">đã hỗ trợ</span>':' – máy chủ hiện <span class="err-t">chưa hỗ trợ</span>'}.`:'Mã PIN chỉ ngăn người thi vô tình mở phần thiết lập; dữ liệu nằm trên trình duyệt của máy, không phải biện pháp bảo mật tuyệt đối. Không đưa tài liệu mật vào ngân hàng câu hỏi.'}</div></div>`;
+ $('#sv').onclick=()=>{Object.assign(s,{ptop:$('#spt').value.trim(),pcb:$('#spc').value.trim(),unit:$('#su').value.trim(),pass:Math.min(10,Math.max(0,+$('#sp').value||0)),showAns:$('#sa').checked,shuffle:$('#ss').checked,music:$('#sm').checked,game:$('#sg').checked});save('set');uiAlert('✔ Đã lưu thiết lập.')};
  el.onchange=e=>{const t=e.target;if(t.dataset.c===undefined)return;DB.cats[+t.dataset.c][t.dataset.k]=t.value.trim();save('cats')};
  el.onclick=async e=>{const t=e.target;
   if(t.dataset.dc!==undefined){const c=DB.cats[+t.dataset.dc];if(await uiConfirm('Xóa lĩnh vực “'+esc(c.name)+'”?')){DB.cats.splice(+t.dataset.dc,1);DB.exams.forEach(x=>x.cats=x.cats.filter(y=>y!==c.id));save('cats');save('exams');aSet()}}
